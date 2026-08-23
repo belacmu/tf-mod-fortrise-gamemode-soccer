@@ -4,7 +4,7 @@ set TOWERFALL_DRIVE=C:
 set BUILD_NAME=TFModFortRiseGameModeSoccer
 set DLL_MOD_FILE_NAME=TFModFortRiseGameModeSoccer.dll
 set PDB_MOD_FILE_NAME=TFModFortRiseGameModeSoccer.pdb
-set MODULE_DIR_NAME=tf-mod-fortrise-gamemode-soccer
+set MODULE_DIR_NAME=Ebe1.Soccer
 
 set REPO_PATH=D:\__dev\code\tf-mod-fortrise-gamemode-soccer\
 set REPO_SCRIPT_PATH=%REPO_PATH%script\
