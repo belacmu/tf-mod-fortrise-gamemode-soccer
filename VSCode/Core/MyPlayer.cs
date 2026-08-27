@@ -1,6 +1,7 @@
 using System;
 using FortRise;
 using HarmonyLib;
+using Microsoft.Xna.Framework;
 using Monocle;
 using MonoMod.Utils;
 using TowerFall;
@@ -73,6 +74,17 @@ namespace TFModFortRiseGameModeSoccer
     /// Le viseur est la pointe de fleche qui suit la direction visee. Ici on ne vise
     /// pas une cible, on arme un coup de pied - et la fleche annonce un tir qui
     /// n'arrivera jamais.
+    ///
+    /// <b>Le viseur ne se cache PAS par sa visibilite, contrairement a l'arc</b>, et
+    /// c'est ce qui le laissait apparaitre a chaque frappe. Les deux ne sont pas
+    /// decides au meme moment : <c>bowSprite.Visible</c> est pose pendant l'update,
+    /// donc apres lui on a le dernier mot ; <c>aimer.Visible</c>, lui, est reecrit
+    /// dans <c>Player.DoWrapRender</c> - c'est-a-dire au moment du DESSIN, apres tout
+    /// correctif pose sur l'update, et juste avant le trait qui le trace.
+    ///
+    /// On le reduit donc a une taille nulle, ce que rien ne remet en place : le jeu
+    /// ecrit la rotation du viseur, sa visibilite et sa couleur, jamais son echelle.
+    /// C'est la seule prise qui tienne des deux cotes de la barriere.
     /// </summary>
     private static void HideBow(Player player)
     {
@@ -88,6 +100,7 @@ namespace TFModFortRiseGameModeSoccer
       if (aimer != null)
       {
         aimer.Visible = false;
+        aimer.Scale = Vector2.Zero;
       }
     }
 

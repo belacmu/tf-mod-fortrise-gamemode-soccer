@@ -131,6 +131,25 @@ namespace TFModFortRiseGameModeSoccer
         var axis = (Vector2)moveAxis.GetValue(__instance);
 
         __instance.Speed.Y = axis.Y * SPEED;
+
+        // **On EFFACE l'intention verticale une fois lue**, et c'est ce qui repare le
+        // "bas tout seul ne fait rien".
+        //
+        // <c>InputDucking</c> vaut exactement "au sol, sans direction horizontale, vers
+        // le bas" - c'est-a-dire la moitie de ce qu'on veut pouvoir faire, et le jeu y
+        // repond par un <c>return</c> pose BIEN AVANT le deplacement. Corriger l'etat
+        // rendu ne suffisait donc pas : l'image entiere etait deja perdue, aucun MoveV
+        // n'ayant eu lieu. En diagonale la condition tombait a faux et l'archer
+        // descendait - d'ou un bas qui ne marchait qu'accompagne.
+        //
+        // La verticale ayant deja servi, la mettre a zero ne coute rien : la visee lit
+        // <c>AimAxis</c> et non cet axe, le sens du regard ne depend que de X, et les
+        // autres lecteurs de cet axe vivent tous dans la branche "en l'air" ou l'on
+        // n'est jamais.
+        if (axis.Y != 0f)
+        {
+          moveAxis.SetValue(__instance, new Vector2(axis.X, 0f));
+        }
       }
       catch (Exception e)
       {
