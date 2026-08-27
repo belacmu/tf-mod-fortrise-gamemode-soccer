@@ -85,6 +85,11 @@ namespace TFModFortRiseGameModeSoccer
     {
       Reset();
 
+      // Le stade AVANT tout le reste : il efface la tour et remonte des murs, et les
+      // cages se creusent ensuite dans ces murs-la. L'ordre inverse aurait fait
+      // reboucher les buts par l'enceinte.
+      SoccerPitch.Build(level);
+
       Vector2 leftPos = GoalPlacement.Find(level, true);
       Vector2 rightPos = GoalPlacement.Find(level, false);
 
@@ -100,8 +105,12 @@ namespace TFModFortRiseGameModeSoccer
 
       // Le ballon nait au milieu des deux buts, en hauteur : il tombe alors au
       // centre du terrain et la manche part d'une position symetrique.
+      //
+      // Sauf sur un terrain plat, ou rien ne tombe : le ballon y est pose exactement
+      // au rond central, ce qui est de toute facon l'endroit ou l'on voulait qu'il
+      // finisse.
       Vector2 center = new Vector2((leftPos.X + rightPos.X) / 2f,
-                                   Math.Min(leftPos.Y, rightPos.Y) - 24f);
+                                   Math.Min(leftPos.Y, rightPos.Y) - (SoccerPitch.FlatSetting ? 0f : 24f));
       if (center.Y < 16f)
       {
         center.Y = 16f;

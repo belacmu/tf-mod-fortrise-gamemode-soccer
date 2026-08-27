@@ -217,18 +217,42 @@ namespace TFModFortRiseGameModeSoccer
       Free();
     }
 
+    /// <summary>
+    /// Freinage du ballon sur un terrain plat, par image.
+    ///
+    /// Plus fort que le roulement au sol : vu de dessus, le ballon frotte la pelouse
+    /// sur toute sa course et non seulement quand il repose dessus. Sans cela une
+    /// frappe traverse le stade en rebondissant d'un mur a l'autre sans jamais
+    /// s'arreter, et le jeu devient une loterie.
+    /// </summary>
+    private const float FLAT_FRICTION = 0.06f;
+
     /// <summary>Le ballon livre a lui-meme : gravite, rebonds, roulement, ramassage.</summary>
     private void Free()
     {
-      Speed.Y += GRAVITY * Engine.TimeMult;
+      bool flat = SoccerPitch.Flat;
+
+      // Sur un terrain plat il n'y a pas de bas : le ballon garde sa direction et ne
+      // perd que de la vitesse, dans les deux axes a la fois. C'est ce qui fait la
+      // difference entre un ballon de foot et un ballon qui retombe.
+      if (!flat)
+      {
+        Speed.Y += GRAVITY * Engine.TimeMult;
+      }
+
       Clamp();
 
       Advance();
 
-      // Au sol : il roule et ralentit. Le test est fait apres le deplacement, donc
-      // sur la position reelle du ballon.
-      if (Blocked(Position + Vector2.UnitY))
+      if (flat)
       {
+        Speed.X = Calc.Approach(Speed.X, 0f, FLAT_FRICTION * Engine.TimeMult);
+        Speed.Y = Calc.Approach(Speed.Y, 0f, FLAT_FRICTION * Engine.TimeMult);
+      }
+      else if (Blocked(Position + Vector2.UnitY))
+      {
+        // Au sol : il roule et ralentit. Le test est fait apres le deplacement, donc
+        // sur la position reelle du ballon.
         Speed.X = Calc.Approach(Speed.X, 0f, GROUND_FRICTION * Engine.TimeMult);
       }
 
@@ -397,6 +421,21 @@ namespace TFModFortRiseGameModeSoccer
     private void OnHitV()
     {
       remainder.Y = 0f;
+
+      // Sur un terrain plat, un mur du haut vaut un mur du cote : le ballon rebondit
+      // dessus au lieu de s'y poser. Le seuil d'arret n'a de sens que sous une gravite
+      // qui plaque le ballon au sol - ici il transformerait chaque contact avec la
+      // ligne de touche en arret net.
+      if (SoccerPitch.Flat)
+      {
+        if (Math.Abs(Speed.Y) > 1.2f)
+        {
+          Sounds.env_ballTouchJump.Play(X, 1f);
+        }
+
+        Speed.Y = -Speed.Y * BOUNCE;
+        return;
+      }
 
       // Un rebond qui n'a plus de quoi rebondir doit S'ARRETER, sinon le ballon
       // vibre indefiniment d'un demi-pixel sur le sol.

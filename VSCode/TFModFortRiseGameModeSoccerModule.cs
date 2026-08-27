@@ -28,7 +28,14 @@ namespace TFModFortRiseGameModeSoccer
         typeof(MyPlayerOnPlayer),
         typeof(MyPlayerDeath),
         typeof(MyArrowHUD),
+        typeof(MyVersusModeButton),
+        typeof(FlatPlay),
     ];
+
+    public static TFModFortRiseGameModeSoccerSettings Settings =>
+        Instance != null
+            ? Instance.GetSettings<TFModFortRiseGameModeSoccerSettings>()!
+            : new TFModFortRiseGameModeSoccerSettings();
 
     public TFModFortRiseGameModeSoccerModule(IModContent content, IModuleContext context, ILogger logger)
         : base(content, context, logger)
@@ -43,12 +50,65 @@ namespace TFModFortRiseGameModeSoccer
 
       foreach (var hookable in Hookables)
       {
-        hookable.GetMethod(nameof(IHookable.Load))!.Invoke(null, [context.Harmony]);
+        // Un accrochage qui echoue ne doit pas empecher le JEU de demarrer. Le prix
+        // d'un reglage absent est une ligne de journal ; celui d'un jeu qui ne se
+        // lance plus est la soiree.
+        try
+        {
+          hookable.GetMethod(nameof(IHookable.Load))!.Invoke(null, [context.Harmony]);
+        }
+        catch (Exception e)
+        {
+          TFModFortRiseGameModeSoccer.Logger.Error(
+              $"{hookable.Name} non accroche : {e.InnerException?.Message ?? e.Message}");
+        }
       }
 
       foreach (var registerable in Registerables)
       {
-        registerable.GetMethod(nameof(IRegisterable.Register))!.Invoke(null, [content, context.Registry]);
+        try
+        {
+          registerable.GetMethod(nameof(IRegisterable.Register))!
+              .Invoke(null, [content, context.Registry]);
+        }
+        catch (Exception e)
+        {
+          TFModFortRiseGameModeSoccer.Logger.Error(
+              $"{registerable.Name} non inscrit : {e.InnerException?.Message ?? e.Message}");
+        }
+      }
+    }
+
+    public override ModuleSettings CreateSettings()
+    {
+      return new TFModFortRiseGameModeSoccerSettings();
+    }
+
+    /// <summary>
+    /// Ecrit les reglages sur disque tout de suite.
+    ///
+    /// FortRise ne les enregistre qu'en sortant du menu Options : une valeur changee
+    /// dans la popup d'avant-match resterait en memoire et serait perdue au prochain
+    /// lancement. SaveSettings est interne cote FortRise, d'ou la reflexion - le meme
+    /// detour que les autres mods du depot.
+    /// </summary>
+    public static void SaveSettingsNow()
+    {
+      if (Instance == null)
+      {
+        return;
+      }
+
+      try
+      {
+        var method = typeof(Mod).GetMethod("SaveSettings",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+
+        method?.Invoke(Instance, null);
+      }
+      catch (Exception e)
+      {
+        TFModFortRiseGameModeSoccer.Logger.Info("[Soccer] reglages non enregistres : " + e.Message);
       }
     }
 

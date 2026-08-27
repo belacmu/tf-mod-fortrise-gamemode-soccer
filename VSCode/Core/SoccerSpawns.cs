@@ -33,7 +33,13 @@ namespace TFModFortRiseGameModeSoccer
     {
       Level level = session.CurrentLevel;
 
-      List<Vector2> points = Gather(level);
+      // Sur un stade, les points de depart de la tour n'ont plus de sens : ils etaient
+      // poses par rapport a des plateformes qui n'existent plus, et ceux qui frolaient
+      // un bord se retrouvent dans le mur d'enceinte.
+      List<Vector2> points = SoccerPitch.Enabled
+          ? SoccerPitch.Spawns(level, leftGoal, rightGoal)
+          : Gather(level);
+
       points.Sort((a, b) => a.X.CompareTo(b.X));
 
       // Aucun point de depart dans la tour : on part des buts eux-memes, decales
