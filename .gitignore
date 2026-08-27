@@ -3,3 +3,7 @@ release*.zip
 todo
 ModFile/settings.json
 
+
+# Sortie de compilation : release.bat la recopie depuis bin, rien a versionner.
+VSCode/bin
+VSCode/obj
