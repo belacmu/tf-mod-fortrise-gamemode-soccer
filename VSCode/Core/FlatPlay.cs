@@ -79,7 +79,18 @@ namespace TFModFortRiseGameModeSoccer
 
       if (setter != null)
       {
-        setGround = (Action<Player, bool>)setter.CreateDelegate(typeof(Action<Player, bool>));
+        try
+        {
+          setGround = (Action<Player, bool>)setter.CreateDelegate(typeof(Action<Player, bool>));
+        }
+        catch (Exception)
+        {
+          // Fabriquer un delegue sur un accesseur prive n'est pas garanti par toutes
+          // les executions. On retombe alors sur l'invocation ordinaire : elle alloue
+          // a chaque image, ce qui est le prix a payer pour que le mode marche partout
+          // plutot que de ne pas marcher du tout.
+          setGround = (player, value) => setter.Invoke(player, [value]);
+        }
       }
 
       MethodInfo normal = AccessTools.DeclaredMethod(typeof(Player), "NormalUpdate");
