@@ -43,6 +43,11 @@ namespace TFModFortRiseGameModeSoccer
       // de son equipe, il faut donc savoir ou ils sont. La geometrie du niveau est
       // deja en place a ce moment, et le terrain doit etre visible pendant la
       // cinematique de debut - on doit savoir ou l'on va avant de pouvoir courir.
+      // Monocle n'appelle ni Removed ni ne vide Scene en fin de manche : un archer qui
+      // finissait la precedente en l'air resterait "en saut" et traverserait le ballon
+      // sans jamais pouvoir le prendre.
+      FlatPlay.Reset();
+
       SoccerMatch.Setup(Session.CurrentLevel);
 
       // Et non SpawnPlayersTeams() : celui du jeu indexe les points d'equipe de la
@@ -60,6 +65,10 @@ namespace TFModFortRiseGameModeSoccer
       }
 
       Session.CurrentLevel.Add<SoccerHUD>(new SoccerHUD());
+
+      // L'indicateur de direction remplace le viseur du jeu, qu'on fait disparaitre :
+      // sans lui, plus rien ne dit dans quel sens partira la frappe.
+      Session.CurrentLevel.Add<SoccerAimer>(new SoccerAimer());
     }
 
     public override void OnRoundStart()

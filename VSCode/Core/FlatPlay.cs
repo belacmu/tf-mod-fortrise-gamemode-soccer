@@ -54,6 +54,12 @@ namespace TFModFortRiseGameModeSoccer
     /// </summary>
     private const float SPEED = 1.5f;
 
+    /// <summary>Vitesse initiale du saut sur place, en pixels par image.</summary>
+    private const float HOP_SPEED = 2.6f;
+
+    /// <summary>Ce que le saut sur place perd par image. Il decide de sa duree.</summary>
+    private const float HOP_GRAVITY = 0.16f;
+
     /// <summary>Etat "accroupi" de la machine a etats du joueur.</summary>
     private const int DUCKING = 2;
 
@@ -72,10 +78,62 @@ namespace TFModFortRiseGameModeSoccer
 
     private static FieldInfo moveAxis;
 
+    /// <summary>L'etat d'entree que le joueur a deja lu cette image.</summary>
+    private static FieldInfo inputState;
+
+    /// <summary>Hauteur de depart du saut, par archer. NaN : pas de saut en cours.</summary>
+    private static readonly float[] hopFloor = new float[8];
+
+    /// <summary>Vitesse verticale du saut en cours, par archer.</summary>
+    private static readonly float[] hopSpeed = new float[8];
+
+    private static readonly bool[] hopping = new bool[8];
+
+    /// <summary>
+    /// Cet archer est-il en l'air ?
+    ///
+    /// Le ballon le demande : sauter par-dessus un ballon qui roule est TOUT l'interet
+    /// du saut sur un terrain plat. Sans cela le saut ne serait qu'une animation.
+    /// </summary>
+    public static bool Hopping(int playerIndex)
+    {
+      return playerIndex >= 0 && playerIndex < hopping.Length && hopping[playerIndex];
+    }
+
+    /// <summary>Efface les sauts en cours. A appeler au DEBUT de chaque manche.</summary>
+    public static void Reset()
+    {
+      // Monocle n'appelle ni Removed ni ne vide Scene en fin de manche : un archer qui
+      // finissait la manche en l'air resterait "en saut" a la manche suivante, et
+      // traverserait le ballon sans jamais pouvoir le prendre.
+      for (int i = 0; i < hopping.Length; i++)
+      {
+        hopping[i] = false;
+        hopSpeed[i] = 0f;
+      }
+    }
+
     public static void Load(IHarmony harmony)
     {
       MethodInfo setter = AccessTools.PropertySetter(typeof(Player), "OnGround");
       moveAxis = AccessTools.Field(typeof(Player), "moveAxis");
+      inputState = AccessTools.Field(typeof(Player), "input");
+
+      // La visee libre, sans toucher aux variantes du joueur.
+      //
+      // Le jeu decide de l'arrondi a huit directions en passant "snap" a
+      // GetAimDirection, calcule depuis la variante FreeAiming. On force ce seul
+      // parametre plutot que d'ecrire dans les variantes : celles-ci appartiennent au
+      // joueur, elles sont enregistrees avec ses reglages de match, et un mode n'a pas a
+      // les changer dans son dos pour tous les autres modes.
+      MethodInfo aim = AccessTools.DeclaredMethod(typeof(PlayerInput),
+          nameof(PlayerInput.GetAimDirection));
+
+      if (aim != null)
+      {
+        harmony.Patch(aim,
+            prefix: new HarmonyMethod(typeof(FlatPlay), nameof(GetAimDirection_prefix)));
+      }
 
       if (setter != null)
       {
@@ -129,8 +187,22 @@ namespace TFModFortRiseGameModeSoccer
         setGround(__instance, true);
 
         var axis = (Vector2)moveAxis.GetValue(__instance);
+        int index = __instance.PlayerIndex;
 
-        __instance.Speed.Y = axis.Y * SPEED;
+        // **En visee, la course est bridee par le jeu, et c'est ce qu'on defait.**
+        //
+        // Un archer qui vise plante ses pieds : NormalUpdate ramene sa vitesse
+        // horizontale a zero des lors qu'il est au sol - et nous, on le declare au sol
+        // en permanence. Charger une frappe revenait donc a s'immobiliser. On repose
+        // donc la vitesse ici ; le freinage du jeu ne fait plus que la reduire d'un
+        // cran, ce qui donne un deplacement legerement ralenti pendant la charge - un
+        // effet qu'on aurait ecrit exprès.
+        if (__instance.Aiming)
+        {
+          __instance.Speed.X = axis.X * SPEED;
+        }
+
+        Hop(__instance, index, axis);
 
         // **On EFFACE l'intention verticale une fois lue**, et c'est ce qui repare le
         // "bas tout seul ne fait rien".
@@ -165,6 +237,87 @@ namespace TFModFortRiseGameModeSoccer
     /// l'esquive, la mort, la prise de rebord - continue de decider comme d'habitude.
     /// Bloquer plus largement aurait fige l'archer dans son etat courant.
     /// </summary>
+    /// <summary>
+    /// Le saut sur place : un arc qui revient exactement d'ou il est parti.
+    ///
+    /// <b>Il est ecrit a la main parce que la gravite n'existe plus.</b> Le saut du jeu
+    /// pose une impulsion et laisse la chute faire le reste ; sans chute, l'archer
+    /// serait parti vers le haut pour ne jamais revenir. On retient donc la hauteur du
+    /// depart, on applique NOTRE pesanteur le temps du vol, et l'on repose l'archer sur
+    /// sa ligne exactement.
+    ///
+    /// <b>Sur un plateau vu de dessus, sauter n'est pas decoratif</b> : c'est ce qui
+    /// permet d'enjamber un ballon qui roule sans le prendre - le ballon lit
+    /// <see cref="Hopping"/> avant de se laisser ramasser. Un tacle, en somme, mais dans
+    /// l'autre sens.
+    /// </summary>
+    private static void Hop(Player player, int index, Vector2 axis)
+    {
+      if (index < 0 || index >= hopping.Length)
+      {
+        player.Speed.Y = axis.Y * SPEED;
+        return;
+      }
+
+      if (hopping[index])
+      {
+        hopSpeed[index] += HOP_GRAVITY;
+        player.Speed.Y = hopSpeed[index];
+
+        // On ne redescend pas plus bas que la ligne de depart : c'est elle, le sol.
+        if (hopSpeed[index] > 0f && player.Y >= hopFloor[index])
+        {
+          hopping[index] = false;
+          hopSpeed[index] = 0f;
+          player.Speed.Y = 0f;
+
+          // MoveV et non une ecriture directe : le deplacement du jeu s'arrete sur les
+          // murs, une ecriture enfermerait l'archer dedans.
+          player.MoveV(hopFloor[index] - player.Y, null);
+        }
+
+        return;
+      }
+
+      player.Speed.Y = axis.Y * SPEED;
+
+      if (inputState == null)
+      {
+        return;
+      }
+
+      var state = (InputState)inputState.GetValue(player);
+
+      if (state.JumpPressed)
+      {
+        hopping[index] = true;
+        hopFloor[index] = player.Y;
+        hopSpeed[index] = -HOP_SPEED;
+        player.Speed.Y = -HOP_SPEED;
+
+        Sounds.env_gplatPlayerJump.Play(player.X, 1f);
+      }
+    }
+
+    /// <summary>
+    /// Enleve l'arrondi a huit directions pendant une manche de foot.
+    ///
+    /// C'est le seul parametre a changer : le jeu calcule <c>snap</c> depuis la variante
+    /// FreeAiming du joueur, et l'on repond a sa place sans rien ecrire dans ses
+    /// reglages. La frappe se place alors a l'angle exact du stick, ce qui compte
+    /// beaucoup plus au foot qu'a l'arc - une passe ratee de quinze degres ne trouve
+    /// personne.
+    /// </summary>
+    public static void GetAimDirection_prefix(ref bool snap)
+    {
+      var settings = TFModFortRiseGameModeSoccerModule.Settings;
+
+      if (settings != null && settings.preciseAim && SoccerMatch.Active)
+      {
+        snap = false;
+      }
+    }
+
     public static void NormalUpdate_postfix(ref int __result)
     {
       if (SoccerPitch.Flat && __result == DUCKING)

@@ -33,12 +33,15 @@ namespace TFModFortRiseGameModeSoccer
     {
       Level level = session.CurrentLevel;
 
-      // Sur un stade, les points de depart de la tour n'ont plus de sens : ils etaient
-      // poses par rapport a des plateformes qui n'existent plus, et ceux qui frolaient
-      // un bord se retrouvent dans le mur d'enceinte.
-      List<Vector2> points = SoccerPitch.Enabled
-          ? SoccerPitch.Spawns(level, leftGoal, rightGoal)
-          : Gather(level);
+      // Sur un stade, on se place EN FORMATION plutot que sur les marques de la tour :
+      // elles etaient posees par rapport a des plateformes qui n'existent plus, et
+      // celles qui frolaient un bord se retrouvent dans le mur d'enceinte.
+      if (SoccerPitch.Enabled)
+      {
+        return Formation(session, level, leftGoal, rightGoal);
+      }
+
+      List<Vector2> points = Gather(level);
 
       points.Sort((a, b) => a.X.CompareTo(b.X));
 
@@ -78,6 +81,77 @@ namespace TFModFortRiseGameModeSoccer
 
         level.Add(player);
         spawned++;
+      }
+
+      return spawned;
+    }
+
+    /// <summary>
+    /// Le placement de stade : chaque camp en formation devant son but.
+    ///
+    /// Les archers sont d'abord repartis en deux listes selon leur camp, PUIS places :
+    /// c'est l'ordre dans sa propre equipe qui decide du role, et non l'index de la
+    /// manette. Sans cela, une equipe faite des joueurs 2 et 5 aurait pris les roles
+    /// deux et cinq - un arriere et un milieu, sans personne devant.
+    /// </summary>
+    private static int Formation(Session session, Level level, Vector2 leftGoal, Vector2 rightGoal)
+    {
+      var blue = new List<int>();
+      var red = new List<int>();
+
+      for (int i = 0; i < TFGame.Players.Length; i++)
+      {
+        if (!session.ShouldSpawn(i))
+        {
+          continue;
+        }
+
+        if (TeamOf(session, i) == Allegiance.Red)
+        {
+          red.Add(i);
+        }
+        else
+        {
+          blue.Add(i);
+        }
+      }
+
+      int spawned = 0;
+
+      spawned += Place(session, level, blue, SoccerPitch.Formation(level, leftGoal, blue.Count),
+          Allegiance.Blue);
+
+      spawned += Place(session, level, red, SoccerPitch.Formation(level, rightGoal, red.Count),
+          Allegiance.Red);
+
+      return spawned;
+    }
+
+    private static int Place(Session session, Level level, List<int> team,
+        List<Vector2> places, Allegiance side)
+    {
+      int spawned = 0;
+
+      for (int i = 0; i < team.Count; i++)
+      {
+        int index = team[i];
+
+        // Plus de coequipiers que de roles ne peut pas sortir du tableau : on repart du
+        // premier role, et le jeu ecarte tout seul deux archers au meme endroit.
+        Vector2 at = places.Count > 0 ? places[i % places.Count] : Vector2.Zero;
+
+        try
+        {
+          level.Add(new Player(index, at, side, side,
+              session.GetPlayerInventory(index), session.GetSpawnHatState(index),
+              true, true, true));
+
+          spawned++;
+        }
+        catch (Exception e)
+        {
+          Logger.Error($"SoccerSpawns.Place({index}): " + e.Message);
+        }
       }
 
       return spawned;

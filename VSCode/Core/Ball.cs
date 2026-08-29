@@ -100,6 +100,15 @@ namespace TFModFortRiseGameModeSoccer
         return false;
       }
 
+      // Un archer EN L'AIR enjambe le ballon au lieu de le prendre. C'est tout l'interet
+      // du saut sur un terrain plat, ou il n'y a rien d'autre a sauter : on passe
+      // par-dessus un ballon qui roule, pour le laisser a un coequipier ou pour ne pas
+      // se le faire coller dans les pieds au mauvais moment.
+      if (FlatPlay.Hopping(player.PlayerIndex))
+      {
+        return false;
+      }
+
       Take(player);
       return true;
     }

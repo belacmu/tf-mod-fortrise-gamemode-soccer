@@ -105,6 +105,13 @@ namespace TFModFortRiseGameModeSoccer
           Read = () => s.flat ? "ON" : "OFF",
           Toggle = () => s.flat = !s.flat,
         },
+        new Row
+        {
+          Title = "PRECISE AIM",
+          Hint = "KICK AT THE EXACT STICK ANGLE",
+          Read = () => s.preciseAim ? "ON" : "OFF",
+          Toggle = () => s.preciseAim = !s.preciseAim,
+        },
       };
     }
 

@@ -22,6 +22,7 @@ namespace TFModFortRiseGameModeSoccer
     {
       settings.CreateOnOff("Soccer field", field, (x) => { field = x; Save(); });
       settings.CreateOnOff("Top-down play (no gravity)", flat, (x) => { flat = x; Save(); });
+      settings.CreateOnOff("Precise aim", preciseAim, (x) => { preciseAim = x; Save(); });
     }
 
     /// <summary>
@@ -35,6 +36,16 @@ namespace TFModFortRiseGameModeSoccer
     /// dans les quatre directions comme sur un plateau vu de dessus.
     /// </summary>
     public bool flat { get; set; } = true;
+
+    /// <summary>
+    /// La frappe part a l'angle exact du stick, sans arrondi a huit directions.
+    ///
+    /// Cela compte beaucoup plus au foot qu'a l'arc : une passe ratee de quinze degres
+    /// ne trouve personne, alors qu'une fleche a quinze degres pres touche encore. Ce
+    /// n'est PAS la variante du jeu - on ne touche pas aux reglages du joueur, on
+    /// repond seulement a sa place a la question que le jeu se pose au moment de viser.
+    /// </summary>
+    public bool preciseAim { get; set; } = true;
 
     private void Save()
     {

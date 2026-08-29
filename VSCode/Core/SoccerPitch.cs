@@ -229,36 +229,68 @@ namespace TFModFortRiseGameModeSoccer
     // ------------------------------------------------------------------
 
     /// <summary>
-    /// Ou les archers apparaissent sur un stade.
+    /// Le placement d'avant-match, comme une equipe de foot.
     ///
-    /// Les points de depart de la TOUR n'ont plus de sens ici : ils etaient poses par
-    /// rapport a des plateformes qui n'existent plus, et ceux qui frolaient un bord se
-    /// retrouvent dans le mur d'enceinte. On en pose donc une colonne devant chaque
-    /// but, comme une equipe qui se place avant l'engagement.
+    /// <b>Les points de depart de la TOUR n'ont plus de sens sur un stade</b> : ils
+    /// etaient poses par rapport a des plateformes qui n'existent plus, et ceux qui
+    /// frolaient un bord se retrouvent dans le mur d'enceinte.
+    ///
+    /// <b>Les roles sont ordonnes du plus avance au plus recule</b>, et c'est ce qui
+    /// fait que la formation se degrade proprement quand on est moins nombreux : a un
+    /// contre un il n'y a qu'un attaquant, a deux un attaquant et un gardien, a trois on
+    /// ajoute les deux arrieres - jamais un gardien sans personne devant lui.
+    ///
+    /// Les distances sont des FRACTIONS de la moitie de terrain, pas des pixels : un
+    /// stade elargi par WiderSet place ses joueurs au bon endroit sans que ce code ait a
+    /// le savoir.
     /// </summary>
-    public static List<Vector2> Spawns(Level level, Vector2 leftGoal, Vector2 rightGoal)
+    private static readonly (float Depth, float Side)[] Roles =
+    {
+      // Attaquant : pres du rond central, au milieu. C'est lui qui dispute
+      // l'engagement.
+      (0.72f, 0f),
+
+      // Les deux arrieres, de part et d'autre.
+      (0.38f, -0.26f),
+      (0.38f, 0.26f),
+
+      // Gardien : devant sa cage.
+      (0.06f, 0f),
+
+      // Au-dela de quatre, on etoffe le milieu plutot que d'empiler les gardiens.
+      (0.55f, -0.34f),
+      (0.55f, 0.34f),
+      (0.24f, -0.14f),
+      (0.24f, 0.14f),
+    };
+
+    /// <summary>
+    /// Les places d'une equipe, de l'attaquant au gardien.
+    /// </summary>
+    /// <param name="goal">Le but que cette equipe defend.</param>
+    public static List<Vector2> Formation(Level level, Vector2 goal, int count)
     {
       Rectangle area = Bounds(level);
       var points = new List<Vector2>();
 
-      const int PerSide = 4;
+      float middleX = area.Left + area.Width / 2f;
+      float middleY = area.Top + area.Height / 2f;
 
-      // Reparties sur la moitie centrale de la hauteur : au ras des murs, un archer
-      // gene le gardien plus qu'il n'aide.
-      for (int i = 0; i < PerSide; i++)
+      // Distance du but au centre : c'est la profondeur dont l'equipe dispose.
+      float half = middleX - goal.X;
+
+      for (int i = 0; i < count && i < Roles.Length; i++)
       {
-        float t = (i + 1f) / (PerSide + 1f);
-        float y = area.Top + area.Height * (0.25f + t * 0.5f);
+        (float depth, float side) = Roles[i];
 
-        points.Add(new Vector2(leftGoal.X + 32f, y));
-      }
+        float x = goal.X + half * depth;
+        float y = middleY + area.Height * side;
 
-      for (int i = 0; i < PerSide; i++)
-      {
-        float t = (i + 1f) / (PerSide + 1f);
-        float y = area.Top + area.Height * (0.25f + t * 0.5f);
+        // Jamais dans le mur : la marge vaut une case, comme l'enceinte.
+        y = MathHelper.Clamp(y, area.Top + 12f, area.Bottom - 12f);
+        x = MathHelper.Clamp(x, area.Left + 12f, area.Right - 12f);
 
-        points.Add(new Vector2(rightGoal.X - 32f, y));
+        points.Add(new Vector2(x, y));
       }
 
       return points;
