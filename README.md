@@ -45,6 +45,8 @@ slots as the game has: four normally, **eight with WiderSet**.
   - eight ways, or free with the game's *Free Aiming* variant.
 - Once kicked, the ball flies **like an arrow**: gravity, bouncing off walls, rolling on
   the ground, and it comes back in on the far side when it leaves through an open edge.
+  On a **flat pitch** it does not fall: it brakes on both axes instead of one, and bounces
+  off the top and bottom walls the way it already bounced off the sides.
 - It cannot be picked up again for about a dozen frames after a kick, or the kicker -
   still standing on it - would catch it straight back.
 
@@ -138,12 +140,128 @@ would be stuck on a pitch with nobody to play.
 - A **power bar** above them while charging, white to red. It used to be under their
   feet, which meant inside the ground - an archer's origin *is* at scenery level, and
   twelve pixels lower put it out of sight.
+- A **direction marker** in front of anyone charging or carrying, replacing the game's
+  aimer - see [Where the kick will go](#where-the-kick-will-go).
 
-## Settings
+## The pitch, and playing flat
 
-None. The mode is picked from the versus mode list, and everything else is fixed in
-code: `Ball.cs` for gravity, bouncing and braking, `SoccerMatch.cs` for kick power,
-`Goal.cs` for goal size.
+Three settings, all **on by default**, in **Options > Mods > Soccer** — or, better, on
+**Y** from the SOCCER button of the versus screen, without leaving the menu. That popup is
+the same gesture as in the survival, tag and handicap mods, and it earns its place here
+more than anywhere: you do not know in advance whether you prefer the stadium or a real
+tower, nor whether weightlessness suits you, and the only way to find out is to alternate
+from one match to the next.
+
+| Setting | What it does |
+|---|---|
+| `Soccer field` | replaces the tower with a walled, empty stadium and paints a pitch on the floor |
+| `Top-down play (no gravity)` | no falling, no ducking: you move in four directions as on a board seen from above |
+| `Precise aim` | the kick leaves at the exact stick angle, with no rounding to eight directions |
+
+**They are separate although they go together**, and that is deliberate. Emptying the
+tower into a stadium is a safe change: you know what it looks like. Removing gravity
+changes the nature of the game — it is the experiment, the one nobody knows yet whether
+they like. Merging them into a single switch would force you to give up the stadium in
+order to give up weightlessness.
+
+### The stadium
+
+The tower is **not replaced, it is rewritten**. It is already loaded, with its collision
+grid, its tileset, its spawn points and its background: the cells are cleared, the border
+is switched back on, and the game is left to repaint. Which tile goes where depends on its
+neighbours, so the walls pick up the edges, corners and wear of the original tower. A
+rectangle drawn by hand would have none of that, and it would show.
+
+Same mechanism as carving the goal cages: the cell has to change on **both** sides — in
+the `Grid`, which carries collisions, and in the `bitData`, which carries the drawing —
+because Monocle's `Grid` constructor clones the bit array. Change only one and you get
+either a wall you walk through or a wall you cannot see.
+
+### Kick-off in formation
+
+The tower's spawn points stop making sense on a stadium: they were placed relative to
+platforms that no longer exist, and the ones that hugged an edge end up inside the
+perimeter wall. Each team is laid out as a football team instead, **ordered from the most
+advanced to the most withdrawn**:
+
+| Players | Who is on the pitch |
+|---|---|
+| 1 | a striker, on the centre circle |
+| 2 | striker and keeper |
+| 3-4 | plus the two full-backs |
+| 5-8 | plus midfielders, rather than a second keeper |
+
+That order is what makes the formation degrade properly when you are fewer: never a keeper
+with nobody in front of them. Distances are **fractions** of the half-pitch, not pixels,
+so a stadium widened by WiderSet places its players correctly without this code knowing.
+
+### Flat play
+
+The lever is `Player.OnGround`, and no other was needed. In `NormalUpdate` all of gravity
+lives in one branch — `if (OnGround) { … } else { … Speed.Y = Approach(…) … }`. An archer
+the game believes is standing is never pulled down: no fall, no wall slide, no ledge grab,
+they all live in that same branch. Gravity is not disabled; you stand on the side where it
+does not apply, which is the only way not to fight it every frame.
+
+The vertical then becomes a **speed like the horizontal**: `Speed.Y` is written from the
+player's intention at 1.5 px/frame, the same as the game's run. There is no reason to be
+slower going up than sideways on a board seen from above, and a difference would read
+immediately as a bug.
+
+Everything happens **around `NormalUpdate`**, and the timing is the whole point. A fix
+applied after `Player.Update` would do nothing: `Update` recomputes `OnGround` from
+`GetBelow()` *before* running the state machine, so a value written at the end of one
+frame is erased at the start of the next, before anyone has read it.
+
+Two things the lever gets wrong on its own, both intercepted:
+
+- **Ducking.** `InputDucking` means exactly "on the ground, no horizontal input, pressing
+  down" — which is half of what you want to be able to do. The value `NormalUpdate` hands
+  back to the state machine is converted, so pressing down alone walks down instead of
+  crouching.
+- **Aiming.** Holding shoot used to pin you in place. You can now move in all four
+  directions while charging, which is what makes passing while running possible at all.
+
+Dodge and the other states are untouched: they do not go through `NormalUpdate`, a dodge
+never had gravity anyway, and an archer frozen before kick-off must stay frozen.
+
+### Jumping, on a pitch with no gravity
+
+Jumping still works, and it is not decoration: **it is how you step over a rolling ball
+without picking it up** — the ball checks whether the archer is mid-hop before letting
+itself be taken. A tackle, in reverse.
+
+It is written by hand precisely because gravity is gone. The game's jump sets an impulse
+and lets the fall do the rest; with no fall the archer would have left upwards and never
+come back. The starting height is remembered, our own gravity is applied for the length of
+the flight, and the archer is set back down on exactly that line — through `MoveV`, not a
+direct write, because the game's movement stops on walls and a raw write would seal the
+archer inside one.
+
+### Where the kick will go
+
+The game's aimer is an **arrowhead**: it announced a shot that never comes in this mode,
+and it appeared on every kick. Hiding it took away the only thing that said which way you
+were about to strike — and on a flat pitch, where aiming covers a full 360°, that is the
+single most useful thing on screen.
+
+So a direction marker replaces it: a mark set out from the archer with a tail back towards
+them, growing as the kick charges. **One entity for every archer**, not one attached to
+each: it is added once per round and walks the players, so there is nothing to clean up
+when someone dies and nothing to reconnect when they come back. It only appears when it is
+useful — while charging, or while carrying the ball. Shown permanently it would be eight
+arrows announcing eight gestures, seven of which will not happen.
+
+### Precise aim
+
+This matters far more at football than with a bow. A pass fifteen degrees out finds
+nobody, whereas an arrow fifteen degrees out still hits. This is **not** the game's *Free
+Aiming* variant: the player's own settings are left alone, and the question the game asks
+itself when aiming (`PlayerInput.GetAimDirection`, whose `snap` argument decides the
+rounding) is simply answered on their behalf.
+
+Everything else stays fixed in code: `Ball.cs` for gravity, bouncing and braking,
+`SoccerMatch.cs` for kick power, `Goal.cs` for goal size.
 
 ## API for other mods
 
